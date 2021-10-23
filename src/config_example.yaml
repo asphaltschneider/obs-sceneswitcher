@@ -1,0 +1,48 @@
+# Your Twitch username
+# for instance USERNAME: asphaltschneider
+USERNAME: asphaltschneider
+
+# Create a Twitch application here: https://dev.twitch.tv/console/apps/create
+# (Twitch will complain if you don't have 2-Factor Authentication enabled though)
+# Set the OAuth Redirect URL to http://localhost:17563
+CLIENT_ID: twitch_client_id
+CLIENT_SECRET: twitch_api_client_secret
+
+# twitch category for redeems
+# only add, remove, watch redeems if streaming in this category/game. eg: iRacing or Music
+TWITCH_CATEGORY: Music
+
+# should redeems be created / cleaned if a stream starts / ends
+TWITCH_CREATE_REDEEMS_ON_STREAM_START: yes
+TWITCH_CLEANUP_REDEEMS_ON_STREAM_STOP: yes
+
+# Redeem Defaults
+REDEEM_SWITCH_TIME: 10
+REDEEM_SWITCH_COST: 10
+
+# obs web socket
+OBS_WS_IP: 192.168.11.139
+OBS_WS_PORT: 4444
+OBS_WS_PASS: password
+
+# what's your main scene?
+MAIN_SCENE: plasma music main
+
+# what's your pause scene?
+# cam switch redeems will be paused, as long as your pause scene is active
+PAUSE_SCENE: plasma music pause
+
+# rewards
+REWARDS:
+  REWARD1:
+    NAME: DJ Cam 1
+    OBS: plasma music req cam main
+  REWARD2:
+    NAME: DJ Cam 2
+    OBS: plasma music req cam deck
+  REWARD3:
+    NAME: DJ Cam 3
+    OBS: plasma music req cam wheel
+  REWARD4:
+    NAME: DJ Cam 4
+    OBS: plasma music req cam bg
