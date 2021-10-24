@@ -19,6 +19,10 @@ TWITCH_CLEANUP_REDEEMS_ON_STREAM_STOP: yes
 # Redeem Defaults
 REDEEM_SWITCH_TIME: 10
 REDEEM_SWITCH_COST: 10
+# Enable (True) or Disable (False) the cooldown for a custom reward
+REDEEM_SWITCH_COOLDOWN_ENABLED: True
+# minimum time in seconds between the redeem of the same reward as before if enabled.
+REDEEM_SWITCH_COOLDOWN: 10
 
 # obs web socket
 OBS_WS_IP: 192.168.11.139
@@ -32,17 +36,39 @@ MAIN_SCENE: plasma music main
 # cam switch redeems will be paused, as long as your pause scene is active
 PAUSE_SCENE: plasma music pause
 
+# do you want to set a specific text on an activated scene containing the requesters name?
+SHOW_REWARD: true
+SHOW_REWARD_SOURCE: reward_requester_text
+SHOW_REWARD_TEMPLATE: ___REWARD___ requested by ___REQUESTER___
+
 # rewards
 REWARDS:
   REWARD1:
-    NAME: DJ Cam 1
+    NAME: DJ Cam Main
     OBS: plasma music req cam main
   REWARD2:
-    NAME: DJ Cam 2
+    NAME: DJ Cam Deck
     OBS: plasma music req cam deck
   REWARD3:
-    NAME: DJ Cam 3
+    NAME: DJ Cam Side
     OBS: plasma music req cam wheel
   REWARD4:
-    NAME: DJ Cam 4
+    NAME: DJ Cam Back
     OBS: plasma music req cam bg
+
+SPECIAL_REWARDS:
+  REWARD1:
+    NAME: DJ Viking
+    DESCRIPTION: 15 minutes DJing with helmet.
+    COST: 10000
+    COOLDOWN: 60
+  REWARD2:
+    NAME: DJ Pocahontas
+    DESCRIPTION: 15 minutes DJing as beardy Pocahontas
+    COST: 10000
+    COOLDOWN: 60
+
+NON_DJ_REWARDS:
+  - Alexa - Witz
+  - Alexa - Flachwitz
+  - Alexa - Chuck Norris Witz

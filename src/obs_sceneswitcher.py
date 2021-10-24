@@ -2,6 +2,8 @@ from twitchAPI.pubsub import PubSub
 from twitchAPI.twitch import Twitch
 from twitchAPI.types import AuthScope, InvalidRefreshTokenException, CustomRewardRedemptionStatus
 from twitchAPI.oauth import UserAuthenticator, refresh_access_token
+import simpleobsws
+
 from uuid import UUID
 
 import traceback
@@ -12,6 +14,8 @@ import os
 
 import yaml
 import aiohttp
+import asyncio
+
 
 import time
 import random
@@ -26,7 +30,7 @@ secrets_fn = "twitch_secrets.json"
 redeem_name_file = "redeem_data/redeem_name.txt"
 redeem_user_file = "redeem_data/redeem_user.txt"
 redeems = []
-DEBUG = False
+DEBUG = True
 
 # initate everything we need for thread safe logging to stdout
 logger = logging.getLogger(SCRIPTNAME)
@@ -97,7 +101,7 @@ def callback(uuid: UUID, data: dict) -> None:
 
         if SCRIPTNAME in reward_prompt:
             logger.info("TWITCH - User %s redeemed %s for %s seconds"
-                        % (initiating_user, resp_data["reward"]["title"], config["CAMERA_SWITCH_TIME"]))
+                        % (initiating_user, resp_data["reward"]["title"], config["REDEEM_SWITCH_TIME"]))
 
             tmpDict = {}
             tmpDict["reward_broadcaster_id"] = reward_broadcaster_id
@@ -130,6 +134,90 @@ async def callback_task(payload):
     except Exception as e:
         logger.critical("".join(traceback.TracebackException.from_exception(e).format()))
         pass
+
+
+def createreward(user_id, i, tmpReward):
+    reward_created = 0
+    try:
+        createdreward = twitch.create_custom_reward(broadcaster_id=user_id,
+                                                    title=i,
+                                                    prompt=tmpReward["prompt"],
+                                                    cost=tmpReward["cost"],
+                                                    global_cooldown_seconds=tmpReward["global_cooldown_seconds"],
+                                                    is_global_cooldown_enabled=tmpReward["is_global_cooldown_enabled"])
+        logger.info('TWITCH - setting up reward %s' % (i, ))
+        if DEBUG:
+            print(createdreward)
+        reward_created = 1
+    except Exception as e:
+        logger.info("TWITCH - cannot create reward %s" % (i, ))
+        logger.info("TWITCH - Exception is %s" % (e, ))
+
+    if reward_created == 0:
+        if DEBUG:
+            logger.info("TWITCH - check if reward is still there")
+
+    state.TWITCH_REWARDS = twitch.get_custom_reward(broadcaster_id=user_id)
+
+def construct_rewards():
+    for i in config["REWARDS"]:
+        tmpReward = {}
+        tmpReward["title"] = config["REWARDS"][i]['NAME']
+        tmpReward[
+            "prompt"] = "Schaltet die Kamera auf " + config["REWARDS"][i]['NAME'] + ". Automatisch erstellt durch " + SCRIPTNAME
+        tmpReward["cost"] = config["REDEEM_SWITCH_COST"]
+        tmpReward["is_global_cooldown_enabled"] = config["REDEEM_SWITCH_COOLDOWN_ENABLED"]
+        tmpReward["global_cooldown_seconds"] = config["REDEEM_SWITCH_COOLDOWN"]
+        logger.info("prepared reward %s" % (config["REWARDS"][i]['NAME'],))
+        createreward(user_id, config["REWARDS"][i]['NAME'], tmpReward)
+
+def redeemListInfo(r, stop):
+    a = -1
+    while True:
+        if not len(r) == a:
+            logger.info("Internal - currently waiting redeems %s" % (len(r), ))
+            a = len(r)
+        time.sleep(1)
+        if stop():
+            break
+
+
+def updateRedeemStatus(tmpRedeem, status):
+    # trying to update the redeem
+    try:
+        tmp_redeem_list = [tmpRedeem["redemption_id"], ]
+        twitch.update_redemption_status(broadcaster_id=str(state.TWITCHUSERID),
+                                        reward_id=tmpRedeem["reward_id"],
+                                        redemption_ids=tmp_redeem_list,
+                                        status=status)
+        return True
+    except Exception as e:
+        logger.critical("TWITCH - Something went wrong while updating the redeem status: %s" % (e, ))
+        return False
+
+def redeemFulfiller(r, stop):
+    while True:
+        if (len(r) > 0):
+            tmpRedeem = r.pop()
+            logger.info("Internal - User %s redeemed %s for %s seconds"
+                        % (tmpRedeem["username"], tmpRedeem["title"], config["REDEEM_SWITCH_TIME"], ))
+
+            # initiate scene switch here
+            # redeemCamSwitch(tmpRedeem)
+            updateRedeemStatus(tmpRedeem, CustomRewardRedemptionStatus.FULFILLED)
+            #time.sleep(int(config["CAMERA_SWITCH_TIME"]))
+            logger.info("Internal - Done processing... %s - %s" % (tmpRedeem["username"], tmpRedeem["title"], ))
+        time.sleep(1)
+        if stop():
+            break
+
+def removerewards():
+    all_existing_rewards = twitch.get_custom_reward(broadcaster_id=str(state.TWITCHUSERID))
+    for k in all_existing_rewards["data"]:
+        if SCRIPTNAME in k["prompt"]:
+            twitch.delete_custom_reward(broadcaster_id=str(state.TWITCHUSERID), reward_id=k["id"])
+            logger.info('TWITCH - removing reward %s' % (k["title"], ))
+
 
 # initialize our State class
 state = State()
@@ -187,3 +275,94 @@ twitch.set_user_authentication(TOKEN, target_scope, REFRESH_TOKEN)
 
 user_id = twitch.get_users(logins=[USERNAME])["data"][0]["id"]
 state.TWITCHUSERID = user_id
+
+loop = asyncio.get_event_loop()
+ws = simpleobsws.obsws(host=config["OBS_WS_IP"], port=config["OBS_WS_PORT"], password=config["OBS_WS_PASS"], loop=loop) # Every possible argument has been passed, but none are required. See lib code for defaults.
+
+
+
+async def make_request():
+    await ws.connect() # Make the connection to OBS-Websocket
+    result = await ws.call('GetVersion') # We get the current OBS version. More request data is not required
+    print(result) # Print the raw json output of the GetVersion request
+    await asyncio.sleep(1)
+    data = {'source':'test_source', 'volume':0.5}
+    result = await ws.call('SetVolume', data) # Make a request with the given data
+    print(result)
+    await ws.disconnect() # Clean things up by disconnecting. Only really required in a few specific situations, but good practice if you are done making requests or listening to events.
+
+async def switch_obs_scene(obs_scene_name):
+    await ws.connect() # Make the connection to OBS-Websocket
+    data = {'scene-name':obs_scene_name}
+    result = await ws.call('SetCurrentScene', data) # Make a request with the given data
+    print(result)
+    await ws.disconnect() # Clean things up by disconnecting. Only really required in a few specific situations, but good practice if you are done making requests or listening to events.
+
+async def stream_status():
+    await ws.connect() # Make the connection to OBS-Websocket
+    result = await ws.call('GetStreamingStatus') # Make a request with the given data
+    print(result)
+    await ws.disconnect() # Clean things up by disconnecting. Only really required in a few specific situations, but good practice if you are done making requests or listening to events.
+
+async def set_name_of_requester(reward, requester):
+    await ws.connect() # Make the connection to OBS-Websocket
+    data = {'source': config['SHOW_REWARD_SOURCE']}
+    print(data)
+    result = await ws.call('GetTextGDIPlusProperties', data) # We get the current OBS version. More request data is not required
+    print(result) # Print the raw json output of the GetVersion request
+    data = result
+    await asyncio.sleep(1)
+    if reward != '' and requester != '':
+        tpl = config['SHOW_REWARD_TEMPLATE']
+        tpl = tpl.replace('___REWARD___', reward)
+        tpl = tpl.replace('___REQUESTER___', requester)
+    else:
+        tpl = ''
+    data['text'] = tpl
+    print(data)
+    result = await ws.call('SetTextGDIPlusProperties', data) # Make a request with the given data
+    print(result)
+    await ws.disconnect() # Clean things up by disconnecting. Only really required in a few specific situations, but good practice if you are done making requests or listening to events.
+
+
+#loop.run_until_complete(stream_status())
+#time.sleep(10)
+#loop.run_until_complete(switch_obs_scene(config['PAUSE_SCENE']))
+#loop.run_until_complete(switch_obs_scene('plasma music req cam main'))
+#time.sleep(1)
+#loop.run_until_complete(set_name_of_requester('REWARD', 'USER_XYZ'))
+#time.sleep(10)
+#loop.run_until_complete(set_name_of_requester('', ''))
+#loop.run_until_complete(switch_obs_scene(config['MAIN_SCENE']))
+
+
+
+
+# starting up PubSub
+pubsub = PubSub(twitch)
+pubsub.start()
+
+removerewards()
+construct_rewards()
+
+# you can either start listening before or after you started pubsub.
+uuid = pubsub.listen_channel_points(user_id, callback)
+
+stop_threads = False
+
+redeemMonitorThread = Thread(target=redeemListInfo, args=(redeems, lambda: stop_threads, ))
+redeemWorkThread = Thread(target=redeemFulfiller, args=(redeems, lambda: stop_threads, ))
+
+redeemMonitorThread.start()
+redeemWorkThread.start()
+
+input("any key to end\n")
+stop_threads = True
+
+redeemMonitorThread.join()
+redeemWorkThread.join()
+
+removerewards()
+
+pubsub.unlisten(uuid)
+pubsub.stop()
