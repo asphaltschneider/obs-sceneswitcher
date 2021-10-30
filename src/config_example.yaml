@@ -43,18 +43,50 @@ SHOW_REWARD_TEMPLATE: ___REWARD___ requested by ___REQUESTER___
 
 # rewards
 REWARDS:
-  REWARD1:
-    NAME: DJ Cam Main
-    OBS: plasma music req cam main
-  REWARD2:
-    NAME: DJ Cam Deck
-    OBS: plasma music req cam deck
-  REWARD3:
-    NAME: DJ Cam Side
-    OBS: plasma music req cam wheel
-  REWARD4:
-    NAME: DJ Cam Back
-    OBS: plasma music req cam bg
+  MUSIC:
+    OBS:
+      SCENES:
+        MAIN: plasma music main
+        PAUSE: plasma music pause
+    TWITCH:
+      REWARD1:
+        NAME: DJ Cam Main
+        SCENE: plasma music req cam main
+        TYPE: scene
+      REWARD2:
+        NAME: DJ Cam Deck
+        SCENE: plasma music req cam deck
+        TYPE: scene
+      REWARD3:
+        NAME: DJ Cam Side
+        SCENE: plasma music req cam wheel
+        TYPE: scene
+      REWARD4:
+        NAME: DJ Cam Back
+        SCENE: plasma music req cam bg
+        TYPE: scene
+  IRACING:
+    OBS:
+      SCENES:
+        MAIN: plasma racing
+        PAUSE: plasma racing pause
+    TWITCH:
+      REWARD1:
+        NAME: Alexa Witz
+        TEXT: hat einen Witz bestellt.
+        TYPE: speech
+        COST: 200
+      REWARD2:
+        NAME: Alexa Flachwitz
+        TEXT: hat einen Flachwitz bestellt.
+        TYPE: speech
+        COST: 200
+      REWARD3:
+        NAME: Alexa Chuck Norris Witz
+        TEXT: hat einen Chuck Norris Witz bestellt.
+        TYPE: speech
+        COST: 300
+
 
 SPECIAL_REWARDS:
   REWARD1:
