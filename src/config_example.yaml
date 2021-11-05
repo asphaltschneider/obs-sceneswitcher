@@ -17,12 +17,12 @@ TWITCH_CREATE_REDEEMS_ON_STREAM_START: yes
 TWITCH_CLEANUP_REDEEMS_ON_STREAM_STOP: yes
 
 # Redeem Defaults
-REDEEM_SWITCH_TIME: 10
-REDEEM_SWITCH_COST: 10
+REDEEM_SWITCH_TIME: 30
+REDEEM_SWITCH_COST: 50
 # Enable (True) or Disable (False) the cooldown for a custom reward
 REDEEM_SWITCH_COOLDOWN_ENABLED: True
 # minimum time in seconds between the redeem of the same reward as before if enabled.
-REDEEM_SWITCH_COOLDOWN: 10
+REDEEM_SWITCH_COOLDOWN: 40
 
 # obs web socket
 OBS_WS_IP: 192.168.11.139
@@ -40,6 +40,9 @@ PAUSE_SCENE: plasma music pause
 SHOW_REWARD: true
 SHOW_REWARD_SOURCE: reward_requester_text
 SHOW_REWARD_TEMPLATE: ___REWARD___ requested by ___REQUESTER___
+
+# german joke API
+JOKE_API: https://witzapi.de/api/joke
 
 # rewards
 REWARDS:
@@ -72,20 +75,10 @@ REWARDS:
         PAUSE: plasma racing pause
     TWITCH:
       REWARD1:
-        NAME: Alexa Witz
-        TEXT: hat einen Witz bestellt.
+        NAME: Witz
+        TEXT: will einen Witz hoeren.
         TYPE: speech
-        COST: 200
-      REWARD2:
-        NAME: Alexa Flachwitz
-        TEXT: hat einen Flachwitz bestellt.
-        TYPE: speech
-        COST: 200
-      REWARD3:
-        NAME: Alexa Chuck Norris Witz
-        TEXT: hat einen Chuck Norris Witz bestellt.
-        TYPE: speech
-        COST: 300
+        COST: 500
 
 
 SPECIAL_REWARDS:
@@ -100,7 +93,3 @@ SPECIAL_REWARDS:
     COST: 10000
     COOLDOWN: 60
 
-NON_DJ_REWARDS:
-  - Alexa - Witz
-  - Alexa - Flachwitz
-  - Alexa - Chuck Norris Witz

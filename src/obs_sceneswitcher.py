@@ -4,10 +4,14 @@ from twitchAPI.types import AuthScope, InvalidRefreshTokenException, CustomRewar
 from twitchAPI.oauth import UserAuthenticator, refresh_access_token
 import simpleobsws
 import pyttsx3
+from gtts import gTTS
+from tempfile import TemporaryFile
 
 from uuid import UUID
 
 import traceback
+import requests
+import sounddevice as sd
 
 import re
 import json
@@ -32,9 +36,15 @@ secrets_fn = "twitch_secrets.json"
 redeem_name_file = "redeem_data/redeem_name.txt"
 redeem_user_file = "redeem_data/redeem_user.txt"
 redeems = []
-rq = queue.Queue()
-oq = queue.Queue()
 obs_ws_queue = []
+
+# redeem queue
+rq = queue.Queue()
+# obs queue
+oq = queue.Queue()
+# speech queue
+sq = queue.Queue()
+
 DEBUG = True
 
 # initate everything we need for thread safe logging to stdout
@@ -53,8 +63,8 @@ logger.info("%s" % (SCRIPTNAME, ))
 logger.info("Version: %s" % (VERSION))
 logger.info("---------------------------------------------")
 
-engine = pyttsx3.init()
-engine.setProperty('voice', "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Speech\Voices\Tokens\TTS_MS_DE-DE_HEDDA_11.0")
+#engine = pyttsx3.init()
+#engine.setProperty('voice', "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Speech\Voices\Tokens\TTS_MS_DE-DE_HEDDA_11.0")
 
 
 file_list = os.listdir()
@@ -77,6 +87,8 @@ class State:
     obs_ws_queue = []
     twitch_category = "IRL"
 
+def set_audio_output_device():
+    sd.default.device(1,13)
 
 def update_twitch_secrets(new_data):
     with open(secrets_fn, "w+") as fl:
@@ -179,8 +191,17 @@ def construct_rewards(category):
     for i in config["REWARDS"][category]["TWITCH"]:
         tmpReward = {}
         tmpReward["title"] = config["REWARDS"][category]["TWITCH"][i]['NAME']
-        tmpReward[
-            "prompt"] = "Schaltet die Kamera auf " + config["REWARDS"][category]["TWITCH"][i]['NAME'] + ". Automatisch erstellt durch " + SCRIPTNAME
+        if config["REWARDS"][category]["TWITCH"][i]['TYPE'] == "scene":
+            tmpReward[
+                "prompt"] = "Schaltet die Kamera auf " + \
+                            config["REWARDS"][category]["TWITCH"][i]['NAME'] + \
+                            ". Automatisch erstellt durch " + SCRIPTNAME
+        elif config["REWARDS"][category]["TWITCH"][i]['TYPE'] == "speech":
+            tmpReward[
+                "prompt"] = "Text 2 Speech im Live Stream." \
+                            " Automatisch erstellt durch " + SCRIPTNAME
+        else:
+            tmpReward["prompt"] = "Automatisch erstellt durch " + SCRIPTNAME
         if "COST" in config["REWARDS"][category]["TWITCH"][i]:
             tmpReward["cost"] = config["REWARDS"][category]["TWITCH"][i]["COST"]
         else:
@@ -190,18 +211,17 @@ def construct_rewards(category):
         logger.info("REWARD_CREATOR - prepared reward %s" % (config["REWARDS"][category]["TWITCH"][i]['NAME'],))
         createreward(user_id, config["REWARDS"][category]["TWITCH"][i]['NAME'], tmpReward)
 
-def redeemListInfo(r, rq, oq, stop):
+def redeemListInfo(r, rq, sq, oq, stop):
     logger.info("REDEEM_LISTINFO - entering thread")
     a = -1
     while True:
         if not rq.empty():
             logger.info("REDEEM_LISTINFO - currently waiting redeems %s" % (rq.qsize(), ))
-#        else:
-#            if oq.empty() or oq.qsize() >=1:
-#                # lets update Scene info
-#                qe = {"type": "get_scene", }
-#                oq.put(qe)
-#                time.sleep(2)
+        if not sq.empty():
+            logger.info("REDEEM_LISTINFO - speech queue size %s" % (sq.qsize(),))
+        if not oq.empty():
+            logger.info("REDEEM_LISTINFO - obs queue size %s" % (oq.qsize(),))
+
         time.sleep(1)
         if stop():
             break
@@ -220,7 +240,7 @@ def updateRedeemStatus(tmpRedeem, status):
         logger.critical("TWITCH - Something went wrong while updating the redeem status: %s" % (e, ))
         return False
 
-def redeemFulfiller(r, rq, q, engine, stop):
+def redeemFulfiller(r, rq, sq, q, stop):
     logger.info("REDEEM_FULFILLER - entering thread")
     while True:
         if not rq.empty():
@@ -247,8 +267,8 @@ def redeemFulfiller(r, rq, q, engine, stop):
                             tmp_obs_job["user"] = tmpRedeem["username"]
                             tmp_obs_job["reward"] = tmpRedeem["title"]
                         elif config["REWARDS"][state.twitch_category.upper()]["TWITCH"][i]["TYPE"] == "speech":
-                            engine.say("Der Zuschauer %s wünscht sich %s." % (tmpRedeem["username"], tmpRedeem["title"]))
-                            engine.runAndWait()
+                            #engine.say("Der Zuschauer %s wünscht sich %s." % (tmpRedeem["username"], tmpRedeem["title"]))
+                            #engine.runAndWait()
 
                             tmp_obs_job["type"] = config["REWARDS"][state.twitch_category.upper()]["TWITCH"][i]["TYPE"]
                             tmp_obs_job["text"] = config["REWARDS"][state.twitch_category.upper()]["TWITCH"][i]["TEXT"]
@@ -258,7 +278,11 @@ def redeemFulfiller(r, rq, q, engine, stop):
 
                         if "type" in tmp_obs_job:
                             if config["REWARDS"][state.twitch_category.upper()]["TWITCH"][i]["TYPE"] != "speech":
+                                logger.info("REDEEM_FULFILLER - add job to obs queue")
                                 q.put(tmp_obs_job)
+                            elif config["REWARDS"][state.twitch_category.upper()]["TWITCH"][i]["TYPE"] == "speech":
+                                logger.info("REDEEM_FULFILLER - add job to speech queue")
+                                sq.put(tmp_obs_job)
                             logger.info("REDEEM_FULFILLER - q has %s elements" % (q.qsize(), ))
                             fullfilled = 1
                         else:
@@ -267,6 +291,9 @@ def redeemFulfiller(r, rq, q, engine, stop):
 
 
                 rq.task_done()
+                if tmp_obs_job["type"] == "speech":
+                    logger.info("REDEEM_FULFILLER - q has %s elements" % (q.qsize(),))
+                    fullfilled = 1
 
                 if fullfilled == 1:
                     updateRedeemStatus(tmpRedeem, CustomRewardRedemptionStatus.FULFILLED)
@@ -301,6 +328,36 @@ def twitchWatcher(stop):
         if stop():
             break
     logger.info("TWITCHWATCHER - ending thread")
+
+def speak_this(text):
+    engine = pyttsx3.init()
+    engine.setProperty('voice', "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Speech\Voices\Tokens\TTS_MS_DE-DE_HEDDA_11.0")
+    engine.say(text)
+    engine.runAndWait()
+
+
+def speechWorker(sq, stop):
+    logger.info("SPEECH_WORKER - entering thread")
+    while True:
+        if not sq.empty():
+            logger.info("SPEECH_WORKER - currently waiting jobs %s" % (sq.qsize(),))
+            speech_job = sq.get()
+
+            if speech_job["type"] == "speech":
+                logger.info("SPEECH_WORKER - running...")
+                witz = get_witz()
+                text1 = "%s %s - %s" % (speech_job["user"], speech_job["text"], witz)
+                speak_this(text1)
+            sq.task_done()
+            logger.info("SPEECH_WORKER - finished one. currently waiting jobs %s" % (sq.qsize(),))
+            time.sleep(2)
+
+
+
+        time.sleep(1)
+        if stop():
+            break
+    logger.info("SPEECH_WORKER - ending thread")
 
 def obsWorker(obs_ws_queue, q, loop, stop):
     logger.info("OBS_WORKER - entering thread")
@@ -418,6 +475,12 @@ def removerewards():
             twitch.delete_custom_reward(broadcaster_id=str(state.TWITCHUSERID), reward_id=k["id"])
             logger.info('TWITCH - removing reward %s' % (k["title"], ))
 
+def get_witz():
+    response = requests.get(config["JOKE_API"])
+    result = response.json()
+    joke = result[0]["text"]
+    logger.info("Witz: %s" % (joke))
+    return joke
 
 # initialize our State class
 state = State()
@@ -477,6 +540,7 @@ user_id = twitch.get_users(logins=[USERNAME])["data"][0]["id"]
 state.TWITCHUSERID = user_id
 
 loop = asyncio.get_event_loop()
+loop2 = asyncio.get_event_loop()
 ws = simpleobsws.obsws(host=config["OBS_WS_IP"], port=config["OBS_WS_PORT"], password=config["OBS_WS_PASS"], loop=loop)
 
 #loop1 = asyncio.get_event_loop()
@@ -500,7 +564,7 @@ async def obs_executer(worksteps):
         elif step["type"] == "get_scene":
             result = await ws.call('GetCurrentScene')
             if state.obs_current_scene != result['name']:
-                logger.info("scene has changed to %s" % (result['name']))
+                logger.info("current scene is %s" % (result['name']))
                 state.obs_current_scene = result['name']
         elif step["type"] == "pause":
             logger.info("sleeping for %s seconds" % (step["duration"]))
@@ -536,79 +600,19 @@ async def obs_executer(worksteps):
 
     await ws.disconnect()
 
-#loop = asyncio.get_event_loop()
-#ws = simpleobsws.obsws(host=config["OBS_WS_IP"], port=config["OBS_WS_PORT"], password=config["OBS_WS_PASS"], loop=loop2)
 
-#async def on_switchscenes(data):
-#    logger.info('Scene switched to "%s".' % (data['scene-name']))
-#    state.obs_current_scene = data['scene-name']
+start_with_obs = [{ "type": "get_scene", }]
+obs_running = 0
+while obs_running == 0:
+    try:
+        loop.run_until_complete(obs_executer(start_with_obs))
+        obs_running = 1
+    except Exception as e:
+        logger.info("OBS seems to be not reachable. retrying....")
+        obs_running = 0
+        time.sleep(5)
 
-
-
-
-#
-#
-# async def switch_obs_scene(obs_scene_name, obs_main_scene, duration):
-#     await ws2.connect() # Make the connection to OBS-Websocket
-#     data = {'scene-name':obs_scene_name}
-#     state.obs_current_scene = obs_scene_name
-#     result = await ws2.call('SetCurrentScene', data) # Make a request with the given data
-#     await asyncio.sleep(duration)
-#     data = {'scene-name':obs_main_scene}
-#     state.obs_current_scene = obs_main_name
-#     result = await ws.call('SetCurrentScene', data) # Make a request with the given data
-#     await ws2.disconnect() # Clean things up by disconnecting. Only really required in a few specific situations, but good practice if you are done making requests or listening to events.
-#
-#
-# async def stream_status():
-#     await ws1.connect() # Make the connection to OBS-Websocket
-#     result = await ws1.call('GetStreamingStatus') # Make a request with the given data
-#     #print(result)
-#     await ws1.disconnect() # Clean things up by disconnecting. Only really required in a few specific situations, but good practice if you are done making requests or listening to events.
-#     return result["streaming"]
-#
-# async def set_name_of_requester(reward, requester):
-#     await ws1.connect() # Make the connection to OBS-Websocket
-#     data = {'source': config['SHOW_REWARD_SOURCE']}
-#     print(data)
-#     result = await ws1.call('GetTextGDIPlusProperties', data) # We get the current OBS version. More request data is not required
-#     print(result) # Print the raw json output of the GetVersion request
-#     data = result
-#     await asyncio.sleep(1)
-#     if reward != '' and requester != '':
-#         tpl = config['SHOW_REWARD_TEMPLATE']
-#         tpl = tpl.replace('___REWARD___', reward)
-#         tpl = tpl.replace('___REQUESTER___', requester)
-#     else:
-#         tpl = ''
-#     data['text'] = tpl
-#     print(data)
-#     result = await ws1.call('SetTextGDIPlusProperties', data) # Make a request with the given data
-#     print(result)
-#     await ws1.disconnect() # Clean things up by disconnecting. Only really required in a few specific situations, but good practice if you are done making requests or listening to events.
-#
-
-
-
-
-#loop.run_until_complete(stream_status())
-#loop.run_until_complete(get_obs_scene())
-#time.sleep(10)
-#loop.run_until_complete(switch_obs_scene(config['PAUSE_SCENE']))
-#loop.run_until_complete(switch_obs_scene('plasma music req cam main'))
-#time.sleep(1)
-#loop.run_until_complete(set_name_of_requester('REWARD', 'USER_XYZ'))
-#time.sleep(10)
-#loop.run_until_complete(set_name_of_requester('', ''))
-#loop.run_until_complete(switch_obs_scene(config['MAIN_SCENE']))
-
-async def get_obs_scene():
-    await ws.connect()
-    result = await ws.call('GetCurrentScene')
-    await ws.disconnect()
-    state.obs_current_scene = result['name']
-
-loop.run_until_complete(get_obs_scene())
+joke = get_witz()
 
 
 # starting up PubSub
@@ -621,20 +625,18 @@ uuid = pubsub.listen_channel_points(user_id, callback)
 stop_threads = False
 
 obsWatcherThread = Thread(target=obsWorker, args=(obs_ws_queue, oq, loop, lambda: stop_threads, ))
+speechThread = Thread(target=speechWorker, args=(sq, lambda: stop_threads, ))
 twitchWatcherThread = Thread(target=twitchWatcher, args=( lambda: stop_threads, ))
 rewardCreatorThread = Thread(target=rewardCreator, args=( lambda: stop_threads, ))
-redeemMonitorThread = Thread(target=redeemListInfo, args=(redeems, rq, oq, lambda: stop_threads, ))
-redeemWorkThread = Thread(target=redeemFulfiller, args=(redeems, rq, oq, engine, lambda: stop_threads, ))
+redeemMonitorThread = Thread(target=redeemListInfo, args=(redeems, rq, sq, oq, lambda: stop_threads, ))
+redeemWorkThread = Thread(target=redeemFulfiller, args=(redeems, rq, sq, oq, lambda: stop_threads, ))
 
 obsWatcherThread.start()
+speechThread.start()
 twitchWatcherThread.start()
 rewardCreatorThread.start()
 redeemMonitorThread.start()
 redeemWorkThread.start()
-
-#loop2.run_until_complete(ws2.connect())
-#ws.register(on_switchscenes, 'SwitchScenes')
-#loop.run_forever()
 
 input("any key to end\n")
 stop_threads = True
@@ -643,6 +645,7 @@ rewardCreatorThread.join()
 redeemMonitorThread.join()
 redeemWorkThread.join()
 twitchWatcherThread.join()
+speechThread.join()
 obsWatcherThread.join()
 
 
