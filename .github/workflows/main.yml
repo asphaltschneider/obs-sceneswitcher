@@ -41,7 +41,7 @@ jobs:
       - uses: actions/upload-artifact@v2
         with:
           name: obs_sceneswitcher
-          path: src/config_example.cfg
+          path: src/config_example.yaml
 
       - uses: actions/upload-artifact@v2
         with:
