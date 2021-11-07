@@ -13,6 +13,9 @@ import socket
 import websockets
 import websockets.exceptions
 import websockets.legacy
+import websockets.legacy.client
+import websockets.legacy.auth
+
 
 import re
 import json
