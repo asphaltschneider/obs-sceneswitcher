@@ -10,6 +10,7 @@ from uuid import UUID
 import traceback
 import requests
 import socket
+import websockets
 
 import re
 import json
