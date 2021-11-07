@@ -17,8 +17,8 @@ TWITCH_CREATE_REDEEMS_ON_STREAM_START: yes
 TWITCH_CLEANUP_REDEEMS_ON_STREAM_STOP: yes
 
 # Redeem Defaults
-REDEEM_SWITCH_TIME: 30
-REDEEM_SWITCH_COST: 50
+REDEEM_SWITCH_TIME: 45
+REDEEM_SWITCH_COST: 100
 # Enable (True) or Disable (False) the cooldown for a custom reward
 REDEEM_SWITCH_COOLDOWN_ENABLED: True
 # minimum time in seconds between the redeem of the same reward as before if enabled.
@@ -30,7 +30,7 @@ OBS_WS_PORT: 4444
 OBS_WS_PASS: password
 
 # what's your main scene?
-MAIN_SCENE: plasma music main
+MAIN_SCENE: plasma music main 1
 
 # what's your pause scene?
 # cam switch redeems will be paused, as long as your pause scene is active
@@ -53,21 +53,17 @@ REWARDS:
         PAUSE: plasma music pause
     TWITCH:
       REWARD1:
-        NAME: DJ Cam Main
-        SCENE: plasma music req cam main
-        TYPE: scene
-      REWARD2:
         NAME: DJ Cam Deck
-        SCENE: plasma music req cam deck
-        TYPE: scene
-      REWARD3:
+        SOURCE: plasma req deck
+        TYPE: source
+      REWARD2:
         NAME: DJ Cam Side
-        SCENE: plasma music req cam wheel
-        TYPE: scene
-      REWARD4:
+        SOURCE: plasma req wheel
+        TYPE: source
+      REWARD3:
         NAME: DJ Cam Back
-        SCENE: plasma music req cam bg
-        TYPE: scene
+        SOURCE: plasma req bg
+        TYPE: source
   IRACING:
     OBS:
       SCENES:
@@ -79,6 +75,7 @@ REWARDS:
         TEXT: will einen Witz hoeren.
         TYPE: speech
         COST: 500
+        COOLDOWN: 300
 
 
 SPECIAL_REWARDS:
