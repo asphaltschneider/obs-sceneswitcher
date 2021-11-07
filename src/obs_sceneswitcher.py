@@ -11,6 +11,8 @@ import traceback
 import requests
 import socket
 import websockets
+import websockets.exceptions
+import websockets.legacy
 
 import re
 import json
