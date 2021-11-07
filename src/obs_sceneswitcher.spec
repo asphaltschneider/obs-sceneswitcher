@@ -2,7 +2,7 @@
 
 block_cipher = None
 
-a = Analysis(['ircorners.py'],
+a = Analysis(['obs_sceneswitcher.py'],
              pathex=['C:\\Users\\akira\\Documents\\Repositories\\obs_sceneswitcher\\venv\\lib\\site-packages'],
              binaries=[],
              datas=[],
