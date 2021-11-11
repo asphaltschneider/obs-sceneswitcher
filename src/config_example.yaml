@@ -34,7 +34,7 @@ MAIN_SCENE: plasma music main 1
 
 # what's your pause scene?
 # cam switch redeems will be paused, as long as your pause scene is active
-PAUSE_SCENE: plasma music pause
+PAUSE_SCENE: plasma music visual break
 
 # do you want to set a specific text on an activated scene containing the requesters name?
 SHOW_REWARD: true

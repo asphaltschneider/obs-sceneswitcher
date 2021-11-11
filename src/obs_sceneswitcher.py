@@ -4,6 +4,7 @@ from twitchAPI.types import AuthScope, InvalidRefreshTokenException, CustomRewar
 from twitchAPI.oauth import UserAuthenticator, refresh_access_token
 import simpleobsws
 import pyttsx3
+import pyttsx3.drivers
 
 from uuid import UUID
 
@@ -86,6 +87,7 @@ class State:
     obs_running = False
     twitch_category = "IRL"
     rewards_cleaned = False
+    preferedAudioTracks = {}
 
 def update_twitch_secrets(new_data):
     with open(secrets_fn, "w+") as fl:
@@ -204,7 +206,10 @@ def construct_rewards(category):
         else:
             tmpReward["cost"] = config["REDEEM_SWITCH_COST"]
         tmpReward["is_global_cooldown_enabled"] = config["REDEEM_SWITCH_COOLDOWN_ENABLED"]
-        tmpReward["global_cooldown_seconds"] = config["REDEEM_SWITCH_COOLDOWN"]
+        if "COOLDOWN" in config["REWARDS"][category]["TWITCH"][i]:
+            tmpReward["global_cooldown_seconds"] = config["REWARDS"][category]["TWITCH"][i]["COOLDOWN"]
+        else:
+            tmpReward["global_cooldown_seconds"] = config["REDEEM_SWITCH_COOLDOWN"]
         logger.info("REWARD_CREATOR - prepared reward %s" % (config["REWARDS"][category]["TWITCH"][i]['NAME'],))
         createreward(user_id, config["REWARDS"][category]["TWITCH"][i]['NAME'], tmpReward)
     state.rewards_cleaned = False
@@ -391,9 +396,17 @@ def obsWorker(q, loop, stop):
                     elif obs_job["type"] == "speech":
                         logger.info("OBS_WORKER - text")
                         tmp_worksteps.append({"type": "text", "text": obs_job["text"]});
+                    elif obs_job["type"] == "get_audio_tracks":
+                        logger.info("OBS_WORKER - get audio tracks")
+                        tmp_worksteps.append({"type": "getaudiotracks", "source": obs_job["sourcename"]});
+                    elif obs_job["type"] == "set_audio_track":
+                        logger.info("OBS_WORKER - get audio tracks")
+                        tmp_worksteps.append({"type": "setaudiotrack", "source": obs_job["sourcename"],
+                                              "track": obs_job["track"], "active": obs_job["active"]});
                     else:
                         logger.info("OBS_WORKER - get_scene")
-                        tmp_worksteps.append({"type": "get_scene"});
+                        tmp_worksteps.append({"type": "get_scene"})
+                        tmp_worksteps.append({"type": "setaudiotrack"})
 
                     #logger.info("OBS_WORKER - fire obs executer")
                     loop.run_until_complete(obs_executer(tmp_worksteps))
@@ -468,13 +481,28 @@ def rewardCreator(stop):
                 state.obs_running == True:
             if rewards_set == 0 and state.twitch_category.upper() != current_active_category:
                 if state.twitch_category.upper() in category_list:
-                    if config["REWARDS"][state.twitch_category.upper()]:
+                    if state.twitch_category.upper() in config["REWARDS"]:
 
                         logger.info("REWARD_CREATOR - will create rewards")
                         construct_rewards(state.twitch_category.upper())
                         rewards_set = 1
                         current_active_category = state.twitch_category.upper()
                         state.rewards_cleaned == False
+
+                        if 'AUDIO' in config["REWARDS"][state.twitch_category.upper()]['OBS']:
+                            tmpDict = {}
+                            for a in config["REWARDS"][state.twitch_category.upper()]['OBS']['AUDIO']:
+                                tmpList = config["REWARDS"][state.twitch_category.upper()]['OBS']['AUDIO'][a]['AUDIOTRACKS'].split(",")
+                                tmpDict2 = {}
+                                c = 0
+                                for b in tmpList:
+                                    audiotrack = int(c) + 1
+                                    logger.info("%s - track %s should be %s" % (config["REWARDS"][state.twitch_category.upper()]['OBS']['AUDIO'][a]['NAME'], audiotrack, b))
+
+                                    tmpDict2[str(audiotrack)] = int(b)
+                                    c+=1
+                                tmpDict[config["REWARDS"][state.twitch_category.upper()]['OBS']['AUDIO'][a]["NAME"]] = tmpDict2
+                            state.preferedAudioTracks = tmpDict
 
                     else:
 
@@ -526,6 +554,15 @@ def get_witz():
     joke = result[0]["text"]
     logger.info("Witz: %s" % (joke))
     return joke
+
+def obs_audiotrack_worker(oq, stop):
+    logger.info("REWARD_CREATOR - entering thread")
+    while True:
+
+        time.sleep(2)
+        if stop():
+            break
+    logger.info("REWARD_CREATOR - leaving thread")
 
 # initialize our State class
 state = State()
@@ -658,6 +695,20 @@ async def obs_executer(worksteps):
                 tpl = ''
                 data['text'] = tpl
                 result = await ws.call('SetTextGDIPlusProperties', data)
+            elif step["type"] == "getaudiotracks":
+                logger.info("getaudiotracks")
+                data = {'sourceName': step['sourcename']}
+                result = await ws.call('GetAudioTracks', data)
+            elif step["type"] == "setaudiotrack":
+                logger.info("setaudiotrack")
+                #data = {'sourceName': step['sourcename'], }
+                #'track': int(step['track']), 'active': step['active']}
+                for n in state.preferedAudioTracks:
+                    for t in state.preferedAudioTracks[n]:
+                        if int(state.preferedAudioTracks[n][t]) == 1:
+                            data = {'sourceName': n, 'track': int(t), 'active': True }
+                            logger.info("audiotracks %s" % (data))
+                            result = await ws.call('SetAudioTracks', data)
 
         await ws.disconnect()
     except Exception as e:
@@ -676,6 +727,7 @@ stop_threads = False
 
 obsAliveChecker = Thread(target=obsWatcher, args=( lambda: stop_threads, ))
 obsWatcherThread = Thread(target=obsWorker, args=(oq, loop, lambda: stop_threads, ))
+obsAudioTrackThread = Thread(target=obs_audiotrack_worker, args=(oq, lambda: stop_threads, ))
 speechThread = Thread(target=speechWorker, args=(sq, lambda: stop_threads, ))
 twitchWatcherThread = Thread(target=twitchWatcher, args=( lambda: stop_threads, ))
 rewardCreatorThread = Thread(target=rewardCreator, args=( lambda: stop_threads, ))
@@ -684,6 +736,7 @@ redeemWorkThread = Thread(target=redeemFulfiller, args=(redeems, rq, sq, oq, lam
 
 obsAliveChecker.start()
 obsWatcherThread.start()
+obsAudioTrackThread.start()
 speechThread.start()
 twitchWatcherThread.start()
 rewardCreatorThread.start()
@@ -694,6 +747,7 @@ input("any key to end\n")
 stop_threads = True
 
 obsAliveChecker.join()
+obsAudioTrackThread.join()
 rewardCreatorThread.join()
 redeemMonitorThread.join()
 redeemWorkThread.join()
