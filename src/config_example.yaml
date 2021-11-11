@@ -51,6 +51,13 @@ REWARDS:
       SCENES:
         MAIN: plasma music main
         PAUSE: plasma music pause
+      AUDIO:
+        DEVICE1:
+          NAME: Mikrofon/AUX‐Audio
+          AUDIOTRACKS: 1,1,1,1,1,0
+        DEVICE2:
+          NAME: Desktop‐Audio
+          AUDIOTRACKS: 1,1,1,1,1,0
     TWITCH:
       REWARD1:
         NAME: DJ Cam Deck
@@ -69,10 +76,17 @@ REWARDS:
       SCENES:
         MAIN: plasma racing
         PAUSE: plasma racing pause
+      AUDIO:
+        DEVICE1:
+          NAME: Mikrofon/AUX‐Audio
+          AUDIOTRACKS: 1,1,1,1,1,1
+        DEVICE2:
+          NAME: Desktop‐Audio
+          AUDIOTRACKS: 1,1,1,1,1,0
     TWITCH:
       REWARD1:
-        NAME: Witz
-        TEXT: will einen Witz hoeren.
+        NAME: Schlechter Witz
+        TEXT: will einen schlechten Witz hoeren.
         TYPE: speech
         COST: 500
         COOLDOWN: 300

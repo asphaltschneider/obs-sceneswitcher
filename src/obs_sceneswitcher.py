@@ -76,7 +76,7 @@ if CONFIG_FILE not in file_list:
     input("Press return key to end!")
     exit(0)
 else:
-    with open("config.yaml") as fl:
+    with open("config.yaml", encoding="utf8") as fl:
         config = yaml.load(fl, Loader=yaml.FullLoader)
 
 
@@ -85,7 +85,7 @@ class State:
     obs_current_scene = "UNKNOWN"
     obs_streaming = False
     obs_running = False
-    twitch_category = "IRL"
+    twitch_category = ""
     rewards_cleaned = False
     preferedAudioTracks = {}
 
@@ -401,12 +401,14 @@ def obsWorker(q, loop, stop):
                         tmp_worksteps.append({"type": "getaudiotracks", "source": obs_job["sourcename"]});
                     elif obs_job["type"] == "set_audio_track":
                         logger.info("OBS_WORKER - get audio tracks")
-                        tmp_worksteps.append({"type": "setaudiotrack", "source": obs_job["sourcename"],
-                                              "track": obs_job["track"], "active": obs_job["active"]});
+                        tmp_worksteps.append({"type": "setaudiotrack",})
+                        #tmp_worksteps.append({"type": "setaudiotrack", "source": obs_job["sourcename"],
+                        #                      "track": obs_job["track"], "active": obs_job["active"]});
                     else:
                         logger.info("OBS_WORKER - get_scene")
                         tmp_worksteps.append({"type": "get_scene"})
-                        tmp_worksteps.append({"type": "setaudiotrack"})
+                        #tmp_worksteps.append({"type": "getsourceslist"})
+                        #tmp_worksteps.append({"type": "setaudiotrack"})
 
                     #logger.info("OBS_WORKER - fire obs executer")
                     loop.run_until_complete(obs_executer(tmp_worksteps))
@@ -504,6 +506,7 @@ def rewardCreator(stop):
                                 tmpDict[config["REWARDS"][state.twitch_category.upper()]['OBS']['AUDIO'][a]["NAME"]] = tmpDict2
                             state.preferedAudioTracks = tmpDict
 
+
                     else:
 
                         logger.info("REWARD_CREATOR - no predefined rewards in config for %s" % (state.twitch_category.upper()))
@@ -556,13 +559,22 @@ def get_witz():
     return joke
 
 def obs_audiotrack_worker(oq, stop):
-    logger.info("REWARD_CREATOR - entering thread")
+    logger.info("AUDIOTRACK_WORKER - entering thread")
+    curCat = ''
     while True:
 
+        # tmpDict = {}
+        if curCat != state.twitch_category.upper() and state.preferedAudioTracks != {}:
+            curCat = state.twitch_category.upper()
+            #oq.put({"type": "getsourceslist", })
+            oq.put({"type": "set_audio_track", })
+        #     for a in state.preferedAudioTracks:
+        #         for i in state.preferedAudioTracks[a]:
+        #             logger.info("AUDIOTRACK_WORKER - %s - %s - Track %s = %s" % (curCat, a, i, state.preferedAudioTracks[a][i]))
         time.sleep(2)
         if stop():
             break
-    logger.info("REWARD_CREATOR - leaving thread")
+    logger.info("AUDIOTRACK_WORKER - leaving thread")
 
 # initialize our State class
 state = State()
@@ -695,20 +707,76 @@ async def obs_executer(worksteps):
                 tpl = ''
                 data['text'] = tpl
                 result = await ws.call('SetTextGDIPlusProperties', data)
+            elif step["type"] == "getsourceslist":
+                logger.info("getsourceslist")
+                #data = {'sourceName': step['sourcename']}
+                result = await ws.call('GetSourcesList')
+                print("result %s" % (result))
             elif step["type"] == "getaudiotracks":
                 logger.info("getaudiotracks")
                 data = {'sourceName': step['sourcename']}
                 result = await ws.call('GetAudioTracks', data)
             elif step["type"] == "setaudiotrack":
                 logger.info("setaudiotrack")
+                if config["REWARDS"][state.twitch_category.upper()]:
+                    logger.info("category %s is defined in config" % (state.twitch_category.upper()))
+                    if 'OBS' in config["REWARDS"][state.twitch_category.upper()]:
+                        logger.info("OBS section found for category %s" % (state.twitch_category.upper()))
+                        if 'AUDIO' in config["REWARDS"][state.twitch_category.upper()]['OBS']:
+                            logger.info("AUDIO section found beneath OBS for category %s" % (state.twitch_category.upper()))
+                            tmpDict = {}
+                            for audiotrack in config["REWARDS"][state.twitch_category.upper()]['OBS']['AUDIO']:
+                                logger.info("sourceName %s - audiotracks %s" %
+                                            (config["REWARDS"][state.twitch_category.upper()]['OBS']['AUDIO'][audiotrack]['NAME'],
+                                            config["REWARDS"][state.twitch_category.upper()]['OBS']['AUDIO'][audiotrack]['AUDIOTRACKS']))
+                                tmpList = config["REWARDS"][state.twitch_category.upper()]['OBS']['AUDIO'][audiotrack]['AUDIOTRACKS'].split(",")
+                                tmpDict2 = {}
+                                c = 0
+                                for b in tmpList:
+                                    audiotrackid = int(c) + 1
+                                    logger.info("%s - track %s should be %s" % (
+                                    config["REWARDS"][state.twitch_category.upper()]['OBS']['AUDIO'][audiotrack]['NAME'],
+                                    audiotrackid, b))
+                                    key = "track"+str(audiotrackid)
+                                    if int(b) == 1:
+                                        value = True
+                                    else:
+                                        value = False
+                                    tmpDict2[key] = value
+                                    c += 1
+                                tmpDict[config["REWARDS"][state.twitch_category.upper()]['OBS']['AUDIO'][audiotrack][
+                                    "NAME"]] = tmpDict2
+                            print(tmpDict)
+                            for sourcename in tmpDict:
+                                logger.info("lets check obs for source %s" % (sourcename))
+                                data = {'sourceName': sourcename, }
+                                obsresult = await ws.call('GetAudioTracks', data)
+                                logger.info("result %s" % (obsresult))
+
+                                for trackid in tmpDict[sourcename]:
+                                    logger.info("checking %s" % (trackid))
+                                    if tmpDict[sourcename][trackid] != obsresult[trackid]:
+                                        for c in trackid:
+                                            if c.isdigit():
+                                                trackidnumber = c
+                                        logger.info("we need to change value %s for %s %s to %s" % (trackidnumber, sourcename, trackid, tmpDict[sourcename][trackid]))
+                                        data = {'sourceName': sourcename, 'track': int(trackidnumber), 'active': tmpDict[sourcename][trackid]}
+                                        logger.info(data)
+                                        result = await ws.call('SetAudioTracks', data)
+                                        logger.info("result %s" % (result))
+                                        await asyncio.sleep(1)
                 #data = {'sourceName': step['sourcename'], }
                 #'track': int(step['track']), 'active': step['active']}
-                for n in state.preferedAudioTracks:
-                    for t in state.preferedAudioTracks[n]:
-                        if int(state.preferedAudioTracks[n][t]) == 1:
-                            data = {'sourceName': n, 'track': int(t), 'active': True }
-                            logger.info("audiotracks %s" % (data))
-                            result = await ws.call('SetAudioTracks', data)
+                # for n in state.preferedAudioTracks:
+                #     for t in state.preferedAudioTracks[n]:
+                #         if int(state.preferedAudioTracks[n][t]) == 1:
+                #             data = {'sourceName': n, 'track': int(t), 'active': True }
+                #         else:
+                #             data = {'sourceName': n, 'track': int(t), 'active': False}
+                #         logger.info("audiotracks %s" % (data))
+                #         result = await ws.call('SetAudioTracks', data)
+                #         print("result %s" % (result))
+                #         await asyncio.sleep(1)
 
         await ws.disconnect()
     except Exception as e:
