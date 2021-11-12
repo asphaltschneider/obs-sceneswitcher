@@ -713,15 +713,15 @@ async def obs_executer(worksteps):
                 result = await ws.call('GetSourcesList')
                 print("result %s" % (result))
             elif step["type"] == "getaudiotracks":
-                logger.info("getaudiotracks")
+                #logger.info("getaudiotracks")
                 data = {'sourceName': step['sourcename']}
                 result = await ws.call('GetAudioTracks', data)
             elif step["type"] == "setaudiotrack":
-                logger.info("setaudiotrack")
+                #logger.info("setaudiotrack")
                 if config["REWARDS"][state.twitch_category.upper()]:
-                    logger.info("category %s is defined in config" % (state.twitch_category.upper()))
+                    #logger.info("category %s is defined in config" % (state.twitch_category.upper()))
                     if 'OBS' in config["REWARDS"][state.twitch_category.upper()]:
-                        logger.info("OBS section found for category %s" % (state.twitch_category.upper()))
+                        #logger.info("OBS section found for category %s" % (state.twitch_category.upper()))
                         if 'AUDIO' in config["REWARDS"][state.twitch_category.upper()]['OBS']:
                             logger.info("AUDIO section found beneath OBS for category %s" % (state.twitch_category.upper()))
                             tmpDict = {}
@@ -734,9 +734,9 @@ async def obs_executer(worksteps):
                                 c = 0
                                 for b in tmpList:
                                     audiotrackid = int(c) + 1
-                                    logger.info("%s - track %s should be %s" % (
-                                    config["REWARDS"][state.twitch_category.upper()]['OBS']['AUDIO'][audiotrack]['NAME'],
-                                    audiotrackid, b))
+                                    #logger.info("%s - track %s should be %s" % (
+                                    #config["REWARDS"][state.twitch_category.upper()]['OBS']['AUDIO'][audiotrack]['NAME'],
+                                    #audiotrackid, b))
                                     key = "track"+str(audiotrackid)
                                     if int(b) == 1:
                                         value = True
@@ -751,20 +751,20 @@ async def obs_executer(worksteps):
                                 logger.info("lets check obs for source %s" % (sourcename))
                                 data = {'sourceName': sourcename, }
                                 obsresult = await ws.call('GetAudioTracks', data)
-                                logger.info("result %s" % (obsresult))
+                                #logger.info("result %s" % (obsresult))
 
                                 for trackid in tmpDict[sourcename]:
-                                    logger.info("checking %s" % (trackid))
+                                    #logger.info("checking %s" % (trackid))
                                     if tmpDict[sourcename][trackid] != obsresult[trackid]:
                                         for c in trackid:
                                             if c.isdigit():
                                                 trackidnumber = c
                                         logger.info("we need to change value %s for %s %s to %s" % (trackidnumber, sourcename, trackid, tmpDict[sourcename][trackid]))
                                         data = {'sourceName': sourcename, 'track': int(trackidnumber), 'active': tmpDict[sourcename][trackid]}
-                                        logger.info(data)
+                                        #logger.info(data)
                                         result = await ws.call('SetAudioTracks', data)
-                                        logger.info("result %s" % (result))
-                                        await asyncio.sleep(1)
+                                        #logger.info("result %s" % (result))
+                                        #await asyncio.sleep(1)
                 #data = {'sourceName': step['sourcename'], }
                 #'track': int(step['track']), 'active': step['active']}
                 # for n in state.preferedAudioTracks:
