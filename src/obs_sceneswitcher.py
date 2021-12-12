@@ -634,7 +634,7 @@ user_id = twitch.get_users(logins=[USERNAME])["data"][0]["id"]
 state.TWITCHUSERID = user_id
 
 loop = asyncio.get_event_loop()
-loop2 = asyncio.get_event_loop()
+#loop2 = asyncio.get_event_loop()
 ws = simpleobsws.obsws(host=config["OBS_WS_IP"], port=config["OBS_WS_PORT"], password=config["OBS_WS_PASS"], loop=loop)
 
 async def obs_executer(worksteps):
