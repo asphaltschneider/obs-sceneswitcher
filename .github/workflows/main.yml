@@ -33,6 +33,12 @@ jobs:
           path: src
           spec: obs_sceneswitcher.spec
 
+      - name: PyInstaller Windows obs_scene_trigger
+        uses: JackMcKew/pyinstaller-action-windows@main
+        with:
+          path: src
+          spec: obs_scene_trigger.spec
+
       - uses: actions/upload-artifact@v2
         with:
           name: obs_sceneswitcher
