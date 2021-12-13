@@ -50,7 +50,9 @@ REWARDS:
     OBS:
       SCENES:
         MAIN: plasma music main
-        PAUSE: plasma music pause
+      PAUSE_REDEEMS:
+        - plasma music visual break
+        - plasma end
       AUDIO:
         DEVICE1:
           NAME: Mikrofon/AUX‐Audio

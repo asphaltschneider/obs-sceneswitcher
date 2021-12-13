@@ -35,7 +35,7 @@ from threading import Thread
 import logging
 
 SCRIPTNAME = "obs-sceneswitcher"
-VERSION = "0.02"
+VERSION = "0.03"
 CONFIG_FILE = "config.yaml"
 secrets_fn = "twitch_secrets.json"
 redeem_name_file = "redeem_data/redeem_name.txt"
@@ -78,6 +78,7 @@ if CONFIG_FILE not in file_list:
 else:
     with open("config.yaml", encoding="utf8") as fl:
         config = yaml.load(fl, Loader=yaml.FullLoader)
+        # print(config)
 
 
 # this is our State class, with some helpful variables
@@ -85,6 +86,7 @@ class State:
     obs_current_scene = "UNKNOWN"
     obs_streaming = False
     obs_running = False
+    pause_redeems = False
     twitch_category = ""
     rewards_cleaned = False
     preferedAudioTracks = {}
@@ -222,8 +224,8 @@ def redeemListInfo(r, rq, sq, oq, stop):
             logger.info("REDEEM_LISTINFO - currently waiting redeems %s" % (rq.qsize(), ))
         if not sq.empty():
             logger.info("REDEEM_LISTINFO - speech queue size %s" % (sq.qsize(),))
-        if not oq.empty():
-            logger.info("REDEEM_LISTINFO - obs queue size %s" % (oq.qsize(),))
+        #if not oq.empty():
+        #    logger.info("REDEEM_LISTINFO - obs queue size %s" % (oq.qsize(),))
 
         time.sleep(1)
         if stop():
@@ -373,8 +375,22 @@ def obsWorker(q, loop, stop):
         if state.obs_running == True:
             try:
                 tmp_worksteps = []
-                if not q.empty():
+                # don't activate redeemed sources while we are in a scene, which doesn't support it
+                if 'PAUSE_REDEEMS' in config["REWARDS"][state.twitch_category.upper()]['OBS']:
+                    tmpPauseList = []
+                    b = 0
+                    for a in config["REWARDS"][state.twitch_category.upper()]['OBS']['PAUSE_REDEEMS']:
+                        if a == state.obs_current_scene:
+                            b = 1
+                    if b == 1:
+                        state.pause_redeems = True
+                        # logger.info("REWARD_CREATOR - pause rewards")
+                    else:
+                        state.pause_redeems = False
+
+                if not q.empty() and state.pause_redeems == False:
                     logger.info("OBS_WORKER - currently waiting jobs %s" % (q.qsize(), ))
+
 
                     obs_job = q.get()
 
@@ -417,7 +433,7 @@ def obsWorker(q, loop, stop):
                     time.sleep(2)
                 else:
                     #logger.info("OBS_WORKER - else - still alive...")
-                    time.sleep(5)
+                    time.sleep(1)
                     #logger.info("OBS_WORKER - else - currently waiting jobs %s" % (q.qsize(),))
 
                 tmp_worksteps.append({"type": "get_scene"});
@@ -505,6 +521,8 @@ def rewardCreator(stop):
                                     c+=1
                                 tmpDict[config["REWARDS"][state.twitch_category.upper()]['OBS']['AUDIO'][a]["NAME"]] = tmpDict2
                             state.preferedAudioTracks = tmpDict
+
+
 
 
                     else:
@@ -790,6 +808,8 @@ pubsub.start()
 
 # you can either start listening before or after you started pubsub.
 uuid = pubsub.listen_channel_points(user_id, callback)
+
+
 
 stop_threads = False
 
